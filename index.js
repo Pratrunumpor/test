@@ -12,7 +12,7 @@ const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710"; // ใส่ API Key 
 function convertTo24Hour(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return timeStr;
   const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-  if (!match) return timeStr; // กรณีไม่มีข้อมูลเวลา (เช่น No moonrise) ให้คืนค่าเดิม
+  if (!match) return timeStr; // กรณีไม่มีข้อมูลเวลา ให้คืนค่าเดิม
   
   let hours = parseInt(match[1], 10);
   const minutes = match[2];
@@ -43,13 +43,32 @@ async function getWeatherInfo() {
     const day = data.forecast.forecastday[0].day;
 
     const temp = current.temp_c;
+    const feelsLike = current.feelslike_c; // อุณหภูมิความรู้สึกจริง
     const humidity = current.humidity;
     const condition = current.condition.text;
     const rain = current.precip_mm;
-    const cloud = current.cloud;
-    const wind = current.wind_kph;
+    const cloud = current.cloud; // เมฆปกคลุม
+    const windSpeed = current.wind_kph;
+    const windDir = current.wind_dir; // ทิศทางลม
+    const dewPoint = current.dewpoint_c; // จุดน้ำค้าง
+    const visibility = current.vis_km; // ระยะการมองเห็น
+    const uvIndex = current.uv; // UV Index
     const pm25 = current.air_quality?.pm2_5 ? current.air_quality.pm2_5.toFixed(1) : 'N/A';
     const aqi = current.air_quality?.['us-epa-index'] ?? 'N/A';
+
+    // คำนวณฐานเมฆโดยประมาณ (Cloud Base) เป็นเมตรจากสูตร (Temp - DewPoint) * 125
+    const cloudBaseMeters = (dewPoint !== undefined && temp !== undefined) 
+      ? Math.round((temp - dewPoint) * 125) 
+      : 'N/A';
+
+    // ตรวจสอบโอกาสเกิดพายุฝนฟ้าคะนอง (Thunderstorm) จากสภาพอากาศหรือเงื่อนไข
+    const condLower = condition.toLowerCase();
+    let thunderstormStatus = "ปกติ";
+    if (condLower.includes('thunder') || condLower.includes('storm')) {
+      thunderstormStatus = "⚠️ มีโอกาสเกิดพายุฝนฟ้าคะนอง";
+    } else if (day.daily_chance_of_rain > 70 && cloud > 80) {
+      thunderstormStatus = "ค่อนข้างสูง (เฝ้าระวังฝนฟ้าคะนอง)";
+    }
 
     // แปลงเวลาดาราศาสตร์จาก AM/PM เป็น 24 ชั่วโมง
     const sunrise = convertTo24Hour(astro.sunrise);
@@ -57,7 +76,7 @@ async function getWeatherInfo() {
     const moonrise = convertTo24Hour(astro.moonrise);
     const moonset = convertTo24Hour(astro.moonset);
     const moonPhase = astro.moon_phase;
-    const moonIllumination = astro.moon_illumination;
+    const moonIllumination = astro.moon_illumination; // ความสว่างดวงจันทร์ %
     const precipChance = day.daily_chance_of_rain;
 
     // คำนวณโอกาสเกิดหมอกเป็นเปอร์เซ็นต์ (%)
@@ -67,17 +86,20 @@ async function getWeatherInfo() {
       fogPercent = Math.min(fogPercent + 20, 99);
     }
 
-    let report = `🌤 สภาพอากาศ (เขาค้อ-ภูทับเบิก):\n`;
-    report += `🌡 อุณหภูมิ: ${temp} °C (${condition})\n`;
-    report += `💧 ความชื้น: ${humidity} %\n`;
+    let report = `🌤 สภาพอากาศ (เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์):\n`;
+    report += `🌡 อุณหภูมิ: ${temp} °C (รู้สึกจริง ${feelsLike} °C)\n`;
+    report += `💬 สภาพอากาศ: ${condition}\n`;
+    report += `💧 ความชื้น: ${humidity} % | จุดน้ำค้าง: ${dewPoint} °C\n`;
     report += `🌧 ปริมาณฝน: ${rain} มม. (โอกาสฝนตก: ${precipChance}%)\n`;
-    report += `☁️ เมฆปกคลุม: ${cloud} %\n`;
-    report += `💨 ความเร็วลม: ${wind} กม./ชม.\n`;
+    report += `⚡ พายุฝนฟ้าคะนอง: ${thunderstormStatus}\n`;
+    report += `☁️ เมฆปกคลุม: ${cloud} % | ฐานเมฆ: ${cloudBaseMeters} ม.\n`;
+    report += `💨 ลม: ${windSpeed} กม./ชม. (ทิศทาง: ${windDir})\n`;
+    report += `👀 ระยะมองเห็น: ${visibility} กม. | UV Index: ${uvIndex}\n`;
     report += `😷 PM2.5: ${pm25} µg/m³ (AQI: ${aqi})\n`;
     report += `🌫 โอกาสเกิดหมอก: ${fogPercent} %\n`;
     report += `\n🌙 ข้อมูลดาราศาสตร์:\n`;
-    report += `☀️ พระอาทิตย์ขึ้น: ${sunrise} | ตก: ${sunset}\n`;
-    report += `🌙 พระจันทร์ขึ้น: ${moonrise} | ตก: ${moonset}\n`;
+    report += `☀️ พระอาทิตย์ขึ้น: ${sunrise} น. | ตก: ${sunset} น.\n`;
+    report += `🌙 พระจันทร์ขึ้น: ${moonrise} น. | ตก: ${moonset} น.\n`;
     report += `🌕 ข้างขึ้นข้างแรม: ${moonPhase}\n`;
     report += `✨ ความสว่างดวงจันทร์: ${moonIllumination} %`;
 
@@ -87,6 +109,7 @@ async function getWeatherInfo() {
     return "⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์สภาพอากาศได้ในขณะนี้";
   }
 }
+
 // ฟังก์ชันส่งข้อความตอบกลับทาง LINE ทันที (Reply API)
 async function replyLineMessage(replyToken, textMessage) {
   try {
