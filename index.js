@@ -8,10 +8,24 @@ let latestCommand = "OFF";
 const CHANNEL_ACCESS_TOKEN = "EEaMRFWfkwXaZVIa4DSiIVj+B3FMoAjgJBXa7YP+QQPbSDuKBkVVd4ScIczJcal1sQq1OsOyFlR8VmcWA4GLHCmM8xhkbcvcFXljzpzBOAqbYcVdM9jIJ0x4lHvojlUTvlRDb05JjG5l3Inl1GZ+ewdB04t89/1O/w1cDnyilFU=";
 const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710"; // ใส่ API Key ของ WeatherAPI ที่นี่
 
-// ฟังก์ชันดึงข้อมูลสภาพอากาศจาก WeatherAPI.com
+// ฟังก์ชันช่วยแปลงเวลาจาก AM/PM เป็นรูปแบบ 24 ชั่วโมง
+function convertTo24Hour(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return timeStr;
+  const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return timeStr; // กรณีไม่มีข้อมูลเวลา (เช่น No moonrise) ให้คืนค่าเดิม
+  
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2];
+  const modifier = match[3].toUpperCase();
+  
+  if (modifier === 'PM' && hours < 12) hours += 12;
+  if (modifier === 'AM' && hours === 12) hours = 0;
+  
+  return `${String(hours).padStart(2, '0')}:${minutes}`;
+}
+
 async function getWeatherInfo() {
   try {
-    // เปลี่ยนมาใช้ forecast.json เพื่อดึงข้อมูลดาราศาสตร์ (ดวงอาทิตย์/ดวงจันทร์) และโอกาสฝนตกรายวัน
     const lat = "16.419";
     const lon = "101.1606";
     const url = `https://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${lat},${lon}&days=1&aqi=yes`;
@@ -37,21 +51,20 @@ async function getWeatherInfo() {
     const pm25 = current.air_quality?.pm2_5 ? current.air_quality.pm2_5.toFixed(1) : 'N/A';
     const aqi = current.air_quality?.['us-epa-index'] ?? 'N/A';
 
-    // ข้อมูลดาราศาสตร์และโอกาสฝน
-    const sunrise = astro.sunrise;
-    const sunset = astro.sunset;
-    const moonrise = astro.moonrise;
-    const moonset = astro.moonset;
-    const moonPhase = astro.moon_phase; // เช่น Waxing Gibbous, Full Moon ฯลฯ
-    const moonIllumination = astro.moon_illumination; // ความสว่างดวงจันทร์เป็น %
-    const precipChance = day.daily_chance_of_rain; // โอกาสเกิดฝนตกเป็น %
+    // แปลงเวลาดาราศาสตร์จาก AM/PM เป็น 24 ชั่วโมง
+    const sunrise = convertTo24Hour(astro.sunrise);
+    const sunset = convertTo24Hour(astro.sunset);
+    const moonrise = convertTo24Hour(astro.moonrise);
+    const moonset = convertTo24Hour(astro.moonset);
+    const moonPhase = astro.moon_phase;
+    const moonIllumination = astro.moon_illumination;
+    const precipChance = day.daily_chance_of_rain;
 
-    // คำนวณโอกาสเกิดหมอกเป็นเปอร์เซ็นต์ (%) จากความชื้น เมฆ และลมนิ่ง
-    // สูตรคำนวณเบื้องต้น: ยิ่งความชื้นสูงและลมนิ่ง โอกาสเกิดหมอกยิ่งสูง
+    // คำนวณโอกาสเกิดหมอกเป็นเปอร์เซ็นต์ (%)
     let fogPercent = Math.min(Math.round(((humidity - 50) / 50) * 100), 100);
     if (fogPercent < 0) fogPercent = 0;
     if (cloud > 80 && humidity > 85) {
-      fogPercent = Math.min(fogPercent + 20, 99); // ปรับเพิ่มถ้าเมฆต่ำและความชื้นจัด
+      fogPercent = Math.min(fogPercent + 20, 99);
     }
 
     let report = `🌤 สภาพอากาศ (เขาค้อ-ภูทับเบิก):\n`;
