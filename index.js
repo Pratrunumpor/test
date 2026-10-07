@@ -87,4 +87,22 @@ async function getWeatherInfo() {
     const moonrise = convertTo24Hour(astro.moonrise);
     const moonset = convertTo24Hour(astro.moonset);
     const moonPhase = astro.moon_phase;
-    const moonIllumination = astro.moon_illumination; // ความสว่าง
+    const moonIllumination = astro.moon_illumination; // ความสว่างดวงจันทร์ %
+    const precipChance = day.daily_chance_of_rain;
+
+    // คำนวณโอกาสเกิดหมอกเป็นเปอร์เซ็นต์ (%)
+    let fogPercent = Math.min(Math.round(((humidity - 50) / 50) * 100), 100);
+    if (fogPercent < 0) fogPercent = 0;
+    if (cloud > 80 && humidity > 85) {
+      fogPercent = Math.min(fogPercent + 20, 99);
+    }
+
+    let report = `📅 ${thaiDateStr}\n`;
+    report += `-----------------------------------\n`;
+    report += `🌤 สภาพอากาศ (เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์):\n`;
+    report += `🌡 อุณหภูมิ: ${temp} °C (รู้สึกจริง ${feelsLike} °C)\n`;
+    report += `💬 สภาพอากาศ: ${condition}\n`;
+    report += `💧 ความชื้น: ${humidity} \% \vert{} จุดน้ำค้าง: ${dewPoint} °C\n`;
+    report += `🌧 ปริมาณฝน: ${rain} มม. (โอกาสฝนตก: ${precipChance}%)\n`;
+    report += `⚡ พายุฝนฟ้าคะนอง: ${thunderstormStatus}\n`;
+    report += `☁️ เมฆปกคลุม: ${cloud} % |
