@@ -15,25 +15,13 @@ async function getWeatherInfo() {
     const response = await fetch(url);
     const data = await response.json();
 
-    // ดึงชั่วโมงปัจจุบันตามเวลาประเทศไทย (Asia/Bangkok) อย่างแม่นยำ (0-23)
-    const bangkokHourStr = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Bangkok',
-      hour: 'numeric',
-      hour12: false
-    }).format(new Date());
-    
-    let currentHourIndex = parseInt(bangkokHourStr);
-    if (isNaN(currentHourIndex) || currentHourIndex > 23) {
-      currentHourIndex = 0;
-    }
-
-    // ป้องกัน Error กรณีข้อมูลอาเรย์ยังไม่มา
-    const temp = data.hourly?.temperature_2m?.[currentHourIndex] ?? '-';
-    const humidity = data.hourly?.relative_humidity_2m?.[currentHourIndex] ?? '-';
-    const precipProb = data.hourly?.precipitation_probability?.[currentHourIndex] ?? '-';
-    const rain = data.hourly?.rain?.[currentHourIndex] ?? '-';
-    const cloud = data.hourly?.cloud_cover?.[currentHourIndex] ?? '-';
-    const wind = data.hourly?.wind_speed_10m?.[currentHourIndex] ?? '-';
+    // ดึงข้อมูลตัวแรกสุดของอาเรย์ hourly (ชั่วโมงปัจจุบันที่ API จัดชุดมาให้)
+    const temp = data.hourly?.temperature_2m?.[0] ?? 'N/A';
+    const humidity = data.hourly?.relative_humidity_2m?.[0] ?? 'N/A';
+    const precipProb = data.hourly?.precipitation_probability?.[0] ?? 'N/A';
+    const rain = data.hourly?.rain?.[0] ?? 'N/A';
+    const cloud = data.hourly?.cloud_cover?.[0] ?? 'N/A';
+    const wind = data.hourly?.wind_speed_10m?.[0] ?? 'N/A';
 
     let report = `🌤 สภาพอากาศล่าสุด:\n`;
     report += `🌡 อุณหภูมิ: ${temp} °C\n`;
@@ -46,7 +34,7 @@ async function getWeatherInfo() {
     return report;
   } catch (error) {
     console.error("Error fetching weather details:", error);
-    return "⚠️ ไม่สามารถดึงข้อมูลสภาพอากาศภายนอกได้ในขณะนี้นะจ๊ะ";
+    return "⚠️ ไม่สามารถดึงข้อมูลสภาพอากาศภายนอกได้ในขณะนี้";
   }
 }
 
