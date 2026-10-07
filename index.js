@@ -10,11 +10,11 @@ app.post('/webhook', (req, res) => {
     const userMessage = events[0].message.text.trim();
     console.log("Receive from LINE: " + userMessage);
     
-    if (userMessage === "เปิด" || userMessage === "ON") {
+    if (userMessage === "เปิด" || userMessage === "ON"|| userMessage === "on") {
       latestCommand = "ON";
-    } else if (userMessage === "ปิด" || userMessage === "OFF") {
+    } else if (userMessage === "ปิด" || userMessage === "OFF"|| userMessage === "off") {
       latestCommand = "OFF";
-    } else if (userMessage === "check" || userMessage === "เช็ค") {
+    } else if (userMessage === "check" || userMessage === "เช็ค"|| userMessage === "Check") {
       latestCommand = "check";
     }
   }
