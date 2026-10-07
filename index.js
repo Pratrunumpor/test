@@ -4,44 +4,43 @@ app.use(express.json());
 
 let latestCommand = "OFF";
 
-// ตั้งค่า Channel Access Token ของ LINE Bot คุณ
+// ตั้งค่า Channel Access Token ของ LINE Bot และ WeatherAPI Key ของคุณ
 const CHANNEL_ACCESS_TOKEN = "EEaMRFWfkwXaZVIa4DSiIVj+B3FMoAjgJBXa7YP+QQPbSDuKBkVVd4ScIczJcal1sQq1OsOyFlR8VmcWA4GLHCmM8xhkbcvcFXljzpzBOAqbYcVdM9jIJ0x4lHvojlUTvlRDb05JjG5l3Inl1GZ+ewdB04t89/1O/w1cDnyilFU=";
+const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710"; // ใส่ API Key ของ WeatherAPI ที่นี่
 
-// ฟังก์ชันดึงข้อมูลสภาพอากาศตามพิกัดที่คุณต้องการ
+// ฟังก์ชันดึงข้อมูลสภาพอากาศจาก WeatherAPI.com
 async function getWeatherInfo() {
   try {
-    const url = 'https://api.open-meteo.com/v1/forecast?latitude=16.419&longitude=101.1606&timezone=Asia%2FBangkok&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,rain,cloud_cover,wind_speed_10m,weather_code';
+    // กำหนดพิกัดที่คุณต้องการ (Latitude, Longitude)
+    const lat = "16.419";
+    const lon = "101.1606";
+    const url = `https://api.weatherapi.com/v1/current.json?key=${WEATHER_API_KEY}&q=${lat},${lon}&aqi=yes`;
     
     const response = await fetch(url);
     const data = await response.json();
 
-    // ตรวจสอบว่า API ส่งค่า Error กลับมาหรือไม่
     if (data.error) {
-      console.error("Open-Meteo API Error:", data.reason);
-      return `⚠️ ข้อผิดพลาดจาก API: ${data.reason}`;
+      console.error("WeatherAPI Error:", data.error.message);
+      return `⚠️ ข้อผิดพลาด: ${data.error.message}`;
     }
 
-    // ตรวจสอบว่ามีข้อมูล hourly หรือไม่
-    if (!data.hourly || !Array.isArray(data.hourly.temperature_2m)) {
-      console.error("Invalid data structure:", JSON.stringify(data));
-      return "⚠️ โครงสร้างข้อมูลจาก Open-Meteo ไม่ตรงกับที่คาดไว้";
-    }
+    const current = data.current;
+    const temp = current.temp_c;
+    const humidity = current.humidity;
+    const condition = current.condition.text;
+    const rain = current.precip_mm;
+    const cloud = current.cloud;
+    const wind = current.wind_kph;
+    const pm25 = current.air_quality?.pm2_5 ? current.air_quality.pm2_5.toFixed(1) : 'N/A';
+    const aqi = current.air_quality?.['us-epa-index'] ?? 'N/A';
 
-    const hourly = data.hourly;
-    const temp = hourly.temperature_2m[0] ?? 'N/A';
-    const humidity = hourly.relative_humidity_2m[0] ?? 'N/A';
-    const precipProb = hourly.precipitation_probability[0] ?? 'N/A';
-    const rain = hourly.rain[0] ?? 'N/A';
-    const cloud = hourly.cloud_cover[0] ?? 'N/A';
-    const wind = hourly.wind_speed_10m[0] ?? 'N/A';
-
-    let report = `🌤 สภาพอากาศล่าสุด:\n`;
-    report += `🌡 อุณหภูมิ: ${temp} °C\n`;
+    let report = `🌤 สภาพอากาศล่าสุด (WeatherAPI):\n`;
+    report += `🌡 อุณหภูมิ: ${temp} °C (${condition})\n`;
     report += `💧 ความชื้น: ${humidity} %\n`;
-    report += `🌧 โอกาสฝนตก: ${precipProb} %\n`;
-    report += `💧 ปริมาณฝน: ${rain} มม.\n`;
+    report += `🌧 ปริมาณฝน: ${rain} มม.\n`;
     report += `☁️ เมฆปกคลุม: ${cloud} %\n`;
-    report += `💨 ความเร็วลม: ${wind} กม./ชม.`;
+    report += `💨 ความเร็วลม: ${wind} กม./ชม.\n`;
+    report += `😷 PM2.5: ${pm25} µg/m³ (AQI Index: ${aqi})`;
 
     return report;
   } catch (error) {
@@ -49,6 +48,7 @@ async function getWeatherInfo() {
     return "⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์สภาพอากาศได้ในขณะนี้";
   }
 }
+
 // ฟังก์ชันส่งข้อความตอบกลับทาง LINE ทันที (Reply API)
 async function replyLineMessage(replyToken, textMessage) {
   try {
