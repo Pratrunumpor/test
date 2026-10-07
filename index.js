@@ -11,10 +11,10 @@ const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710"; // ใส่ API Key 
 // ฟังก์ชันดึงข้อมูลสภาพอากาศจาก WeatherAPI.com
 async function getWeatherInfo() {
   try {
-    // พิกัดโซนเขาค้อ - ภูทับเบิก จ.เพชรบูรณ์
+    // เปลี่ยนมาใช้ forecast.json เพื่อดึงข้อมูลดาราศาสตร์ (ดวงอาทิตย์/ดวงจันทร์) และโอกาสฝนตกรายวัน
     const lat = "16.419";
     const lon = "101.1606";
-    const url = `https://api.weatherapi.com/v1/current.json?key=${WEATHER_API_KEY}&q=${lat},${lon}&aqi=yes`;
+    const url = `https://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${lat},${lon}&days=1&aqi=yes`;
     
     const response = await fetch(url);
     const data = await response.json();
@@ -25,6 +25,9 @@ async function getWeatherInfo() {
     }
 
     const current = data.current;
+    const astro = data.forecast.forecastday[0].astro;
+    const day = data.forecast.forecastday[0].day;
+
     const temp = current.temp_c;
     const humidity = current.humidity;
     const condition = current.condition.text;
@@ -34,25 +37,36 @@ async function getWeatherInfo() {
     const pm25 = current.air_quality?.pm2_5 ? current.air_quality.pm2_5.toFixed(1) : 'N/A';
     const aqi = current.air_quality?.['us-epa-index'] ?? 'N/A';
 
-    // ประเมินโอกาสเกิดหมอกเบื้องต้นจากสภาพอากาศ ความชื้น และลม
-    let fogStatus = "ต่ำ";
-    const condLower = condition.toLowerCase();
-    if (condLower.includes('fog') || condLower.includes('mist')) {
-      fogStatus = "สูงมาก (มีหมอกหนาปกคลุม 🌫️)";
-    } else if (humidity >= 85 && wind < 8) {
-      fogStatus = "สูง (ความชื้นสูงและลมนิ่ง เหมาะเกิดทะเลหมอก ☁️)";
-    } else if (humidity >= 75) {
-      fogStatus = "ปานกลาง";
+    // ข้อมูลดาราศาสตร์และโอกาสฝน
+    const sunrise = astro.sunrise;
+    const sunset = astro.sunset;
+    const moonrise = astro.moonrise;
+    const moonset = astro.moonset;
+    const moonPhase = astro.moon_phase; // เช่น Waxing Gibbous, Full Moon ฯลฯ
+    const moonIllumination = astro.moon_illumination; // ความสว่างดวงจันทร์เป็น %
+    const precipChance = day.daily_chance_of_rain; // โอกาสเกิดฝนตกเป็น %
+
+    // คำนวณโอกาสเกิดหมอกเป็นเปอร์เซ็นต์ (%) จากความชื้น เมฆ และลมนิ่ง
+    // สูตรคำนวณเบื้องต้น: ยิ่งความชื้นสูงและลมนิ่ง โอกาสเกิดหมอกยิ่งสูง
+    let fogPercent = Math.min(Math.round(((humidity - 50) / 50) * 100), 100);
+    if (fogPercent < 0) fogPercent = 0;
+    if (cloud > 80 && humidity > 85) {
+      fogPercent = Math.min(fogPercent + 20, 99); // ปรับเพิ่มถ้าเมฆต่ำและความชื้นจัด
     }
 
-    let report = `🌤 สภาพอากาศล่าสุด (เขาค้อ-ภูทับเบิก):\n`;
+    let report = `🌤 สภาพอากาศ (เขาค้อ-ภูทับเบิก):\n`;
     report += `🌡 อุณหภูมิ: ${temp} °C (${condition})\n`;
     report += `💧 ความชื้น: ${humidity} %\n`;
-    report += `🌧 ปริมาณฝน: ${rain} มม.\n`;
+    report += `🌧 ปริมาณฝน: ${rain} มม. (โอกาสฝนตก: ${precipChance}%)\n`;
     report += `☁️ เมฆปกคลุม: ${cloud} %\n`;
     report += `💨 ความเร็วลม: ${wind} กม./ชม.\n`;
-    report += `😷 PM2.5: ${pm25} µg/m³ (AQI Index: ${aqi})\n`;
-    report += `🌫 โอกาสเกิดหมอก: ${fogStatus}`;
+    report += `😷 PM2.5: ${pm25} µg/m³ (AQI: ${aqi})\n`;
+    report += `🌫 โอกาสเกิดหมอก: ${fogPercent} %\n`;
+    report += `\n🌙 ข้อมูลดาราศาสตร์:\n`;
+    report += `☀️ พระอาทิตย์ขึ้น: ${sunrise} | ตก: ${sunset}\n`;
+    report += `🌙 พระจันทร์ขึ้น: ${moonrise} | ตก: ${moonset}\n`;
+    report += `🌕 ข้างขึ้นข้างแรม: ${moonPhase}\n`;
+    report += `✨ ความสว่างดวงจันทร์: ${moonIllumination} %`;
 
     return report;
   } catch (error) {
@@ -60,7 +74,6 @@ async function getWeatherInfo() {
     return "⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์สภาพอากาศได้ในขณะนี้";
   }
 }
-
 // ฟังก์ชันส่งข้อความตอบกลับทาง LINE ทันที (Reply API)
 async function replyLineMessage(replyToken, textMessage) {
   try {
