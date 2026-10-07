@@ -11,7 +11,7 @@ const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710"; // ใส่ API Key 
 // ฟังก์ชันดึงข้อมูลสภาพอากาศจาก WeatherAPI.com
 async function getWeatherInfo() {
   try {
-    // กำหนดพิกัดที่คุณต้องการ (Latitude, Longitude)
+    // พิกัดโซนเขาค้อ - ภูทับเบิก จ.เพชรบูรณ์
     const lat = "16.419";
     const lon = "101.1606";
     const url = `https://api.weatherapi.com/v1/current.json?key=${WEATHER_API_KEY}&q=${lat},${lon}&aqi=yes`;
@@ -34,13 +34,25 @@ async function getWeatherInfo() {
     const pm25 = current.air_quality?.pm2_5 ? current.air_quality.pm2_5.toFixed(1) : 'N/A';
     const aqi = current.air_quality?.['us-epa-index'] ?? 'N/A';
 
-    let report = `🌤 สภาพอากาศล่าสุด (WeatherAPI):\n`;
+    // ประเมินโอกาสเกิดหมอกเบื้องต้นจากสภาพอากาศ ความชื้น และลม
+    let fogStatus = "ต่ำ";
+    const condLower = condition.toLowerCase();
+    if (condLower.includes('fog') || condLower.includes('mist')) {
+      fogStatus = "สูงมาก (มีหมอกหนาปกคลุม 🌫️)";
+    } else if (humidity >= 85 && wind < 8) {
+      fogStatus = "สูง (ความชื้นสูงและลมนิ่ง เหมาะเกิดทะเลหมอก ☁️)";
+    } else if (humidity >= 75) {
+      fogStatus = "ปานกลาง";
+    }
+
+    let report = `🌤 สภาพอากาศล่าสุด (เขาค้อ-ภูทับเบิก):\n`;
     report += `🌡 อุณหภูมิ: ${temp} °C (${condition})\n`;
     report += `💧 ความชื้น: ${humidity} %\n`;
     report += `🌧 ปริมาณฝน: ${rain} มม.\n`;
     report += `☁️ เมฆปกคลุม: ${cloud} %\n`;
     report += `💨 ความเร็วลม: ${wind} กม./ชม.\n`;
-    report += `😷 PM2.5: ${pm25} µg/m³ (AQI Index: ${aqi})`;
+    report += `😷 PM2.5: ${pm25} µg/m³ (AQI Index: ${aqi})\n`;
+    report += `🌫 โอกาสเกิดหมอก: ${fogStatus}`;
 
     return report;
   } catch (error) {
