@@ -38,6 +38,17 @@ async function getWeatherInfo() {
       return `⚠️ ข้อผิดพลาด: ${data.error.message}`;
     }
 
+    // ดึงวันที่ปัจจุบันตามเวลาประเทศไทยในรูปแบบ พ.ศ. (Thai Buddhist Era)
+    const now = new Date();
+    const dateOptions = {
+      timeZone: 'Asia/Bangkok',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    };
+    const thaiDateStr = new Intl.DateTimeFormat('th-TH', { ...dateOptions, calendar: 'buddhist' }).format(now);
+
     const current = data.current;
     const astro = data.forecast.forecastday[0].astro;
     const day = data.forecast.forecastday[0].day;
@@ -61,7 +72,7 @@ async function getWeatherInfo() {
       ? Math.round((temp - dewPoint) * 125) 
       : 'N/A';
 
-    // ตรวจสอบโอกาสเกิดพายุฝนฟ้าคะนอง (Thunderstorm) จากสภาพอากาศหรือเงื่อนไข
+    // ตรวจสอบโอกาสเกิดพายุฝนฟ้าคะนอง (Thunderstorm)
     const condLower = condition.toLowerCase();
     let thunderstormStatus = "ปกติ";
     if (condLower.includes('thunder') || condLower.includes('storm')) {
@@ -76,86 +87,4 @@ async function getWeatherInfo() {
     const moonrise = convertTo24Hour(astro.moonrise);
     const moonset = convertTo24Hour(astro.moonset);
     const moonPhase = astro.moon_phase;
-    const moonIllumination = astro.moon_illumination; // ความสว่างดวงจันทร์ %
-    const precipChance = day.daily_chance_of_rain;
-
-    // คำนวณโอกาสเกิดหมอกเป็นเปอร์เซ็นต์ (%)
-    let fogPercent = Math.min(Math.round(((humidity - 50) / 50) * 100), 100);
-    if (fogPercent < 0) fogPercent = 0;
-    if (cloud > 80 && humidity > 85) {
-      fogPercent = Math.min(fogPercent + 20, 99);
-    }
-
-    let report = `🌤 สภาพอากาศ (เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์):\n`;
-    report += `🌡 อุณหภูมิ: ${temp} °C (รู้สึกจริง ${feelsLike} °C)\n`;
-    report += `💬 สภาพอากาศ: ${condition}\n`;
-    report += `💧 ความชื้น: ${humidity} % | จุดน้ำค้าง: ${dewPoint} °C\n`;
-    report += `🌧 ปริมาณฝน: ${rain} มม. (โอกาสฝนตก: ${precipChance}%)\n`;
-    report += `⚡ พายุฝนฟ้าคะนอง: ${thunderstormStatus}\n`;
-    report += `☁️ เมฆปกคลุม: ${cloud} % | ฐานเมฆ: ${cloudBaseMeters} ม.\n`;
-    report += `💨 ลม: ${windSpeed} กม./ชม. (ทิศทาง: ${windDir})\n`;
-    report += `👀 ระยะมองเห็น: ${visibility} กม. | UV Index: ${uvIndex}\n`;
-    report += `😷 PM2.5: ${pm25} µg/m³ (AQI: ${aqi})\n`;
-    report += `🌫 โอกาสเกิดหมอก: ${fogPercent} %\n`;
-    report += `\n🌙 ข้อมูลดาราศาสตร์:\n`;
-    report += `☀️ พระอาทิตย์ขึ้น: ${sunrise} น. | ตก: ${sunset} น.\n`;
-    report += `🌙 พระจันทร์ขึ้น: ${moonrise} น. | ตก: ${moonset} น.\n`;
-    report += `🌕 ข้างขึ้นข้างแรม: ${moonPhase}\n`;
-    report += `✨ ความสว่างดวงจันทร์: ${moonIllumination} %`;
-
-    return report;
-  } catch (error) {
-    console.error("Fetch Error:", error);
-    return "⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์สภาพอากาศได้ในขณะนี้";
-  }
-}
-
-// ฟังก์ชันส่งข้อความตอบกลับทาง LINE ทันที (Reply API)
-async function replyLineMessage(replyToken, textMessage) {
-  try {
-    await fetch('https://api.line.me/v2/bot/message/reply', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
-      },
-      body: JSON.stringify({
-        replyToken: replyToken,
-        messages: [{ type: 'text', text: textMessage }]
-      })
-    });
-  } catch (error) {
-    console.error("Error replying to LINE:", error);
-  }
-}
-
-app.post('/webhook', async (req, res) => {
-  const events = req.body.events;
-  if (events && events.length > 0) {
-    const event = events[0];
-    const userMessage = event.message.text.trim();
-    const replyToken = event.replyToken;
-
-    console.log("Receive from LINE: " + userMessage);
-
-    if (userMessage === "check" || userMessage === "เช็ค") {
-      latestCommand = "check";
-      await replyLineMessage(replyToken, "🔄 กำลังเรียกข้อมูลจาก NodeMCU...");
-    } 
-    else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
-      const weatherInfo = await getWeatherInfo();
-      await replyLineMessage(replyToken, weatherInfo);
-    }
-  }
-  res.sendStatus(200);
-});
-
-app.get('/command', (req, res) => {
-  res.send(latestCommand);
-  if (latestCommand === "check") {
-    latestCommand = "OFF"; 
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    const moonIllumination = astro.moon_illumination; // ความสว่าง
