@@ -4,18 +4,48 @@ app.use(express.json());
 
 let latestCommand = "OFF";
 
+// ตั้งค่า Channel Access Token ของ LINE Bot และ WeatherAPI Key ของคุณ
 const CHANNEL_ACCESS_TOKEN = "EEaMRFWfkwXaZVIa4DSiIVj+B3FMoAjgJBXa7YP+QQPbSDuKBkVVd4ScIczJcal1sQq1OsOyFlR8VmcWA4GLHCmM8xhkbcvcFXljzpzBOAqbYcVdM9jIJ0x4lHvojlUTvlRDb05JjG5l3Inl1GZ+ewdB04t89/1O/w1cDnyilFU=";
-const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710";
+const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710"; // ใส่ API Key ของ WeatherAPI ที่นี่
 
+// ฟังก์ชันสร้างวันที่และปี พ.ศ. แบบไทย (แม่นยำและไม่พึ่งพา Locale ของระบบ)
+function getThaiDateString() {
+  try {
+    const now = new Date();
+    // ปรับเวลาให้เป็นโซนเวลาประเทศไทย (UTC+7)
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const thTime = new Date(utc + (3600000 * 7));
+
+    const thaiDays = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
+    const thaiMonths = [
+      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    ];
+
+    const dayName = thaiDays[thTime.getDay()];
+    const dayNum = thTime.getDate();
+    const monthName = thaiMonths[thTime.getMonth()];
+    const thaiYear = thTime.getFullYear() + 543;
+
+    return `${dayName}ที่ ${dayNum} ${monthName} พ.ศ. ${thaiYear}`;
+  } catch (e) {
+    return "รายงานสภาพอากาศประจำวัน";
+  }
+}
+
+// ฟังก์ชันช่วยแปลงเวลาจาก AM/PM เป็นรูปแบบ 24 ชั่วโมง
 function convertTo24Hour(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return timeStr;
   const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
   if (!match) return timeStr;
+  
   let hours = parseInt(match[1], 10);
   const minutes = match[2];
   const modifier = match[3].toUpperCase();
+  
   if (modifier === 'PM' && hours < 12) hours += 12;
   if (modifier === 'AM' && hours === 12) hours = 0;
+  
   return `${String(hours).padStart(2, '0')}:${minutes}`;
 }
 
@@ -29,18 +59,11 @@ async function getWeatherInfo() {
     const data = await response.json();
 
     if (data.error) {
+      console.error("WeatherAPI Error:", data.error.message);
       return `⚠️ ข้อผิดพลาด: ${data.error.message}`;
     }
 
-    const now = new Date();
-    const thaiDateStr = new Intl.DateTimeFormat('th-TH', {
-      timeZone: 'Asia/Bangkok',
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      calendar: 'buddhist'
-    }).format(now);
+    const thaiDateStr = getThaiDateString();
 
     const current = data.current;
     const astro = data.forecast.forecastday[0].astro;
@@ -61,7 +84,8 @@ async function getWeatherInfo() {
     const aqi = current.air_quality?.['us-epa-index'] ?? 'N/A';
 
     const cloudBaseMeters = (dewPoint !== undefined && temp !== undefined) 
-      ? Math.round((temp - dewPoint) * 125) : 'N/A';
+      ? Math.round((temp - dewPoint) * 125) 
+      : 'N/A';
 
     const condLower = condition.toLowerCase();
     let thunderstormStatus = "ปกติ";
@@ -81,7 +105,9 @@ async function getWeatherInfo() {
 
     let fogPercent = Math.min(Math.round(((humidity - 50) / 50) * 100), 100);
     if (fogPercent < 0) fogPercent = 0;
-    if (cloud > 80 && humidity > 85) fogPercent = Math.min(fogPercent + 20, 99);
+    if (cloud > 80 && humidity > 85) {
+      fogPercent = Math.min(fogPercent + 20, 99);
+    }
 
     let report = `📅 ${thaiDateStr}\n`;
     report += `-----------------------------------\n`;
@@ -133,6 +159,8 @@ app.post('/webhook', async (req, res) => {
     const event = events[0];
     const userMessage = event.message.text.trim();
     const replyToken = event.replyToken;
+
+    console.log("Receive from LINE: " + userMessage);
 
     if (userMessage === "check" || userMessage === "เช็ค") {
       latestCommand = "check";
