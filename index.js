@@ -15,21 +15,29 @@ async function getWeatherInfo() {
     const response = await fetch(url);
     const data = await response.json();
 
-    // ดึงข้อมูลตัวแรกสุดของอาเรย์ hourly (ชั่วโมงปัจจุบันที่ API จัดชุดมาให้)
-    const temp = data.hourly?.temperature_2m?.[0] ?? 'N/A';
-    const humidity = data.hourly?.relative_humidity_2m?.[0] ?? 'N/A';
-    const precipProb = data.hourly?.precipitation_probability?.[0] ?? 'N/A';
-    const rain = data.hourly?.rain?.[0] ?? 'N/A';
-    const cloud = data.hourly?.cloud_cover?.[0] ?? 'N/A';
-    const wind = data.hourly?.wind_speed_10m?.[0] ?? 'N/A';
+    // พิมพ์ข้อมูลดิบทั้งหมดลงใน Logs ของ Render เพื่อตรวจสอบ
+    console.log("API Raw Data:", JSON.stringify(data));
+
+    // ดึงค่าจาก hourly object โดยตรง
+    const hourly = data.hourly;
+    if (!hourly || !hourly.temperature_2m) {
+      return "⚠️ โครงสร้างข้อมูล API ไม่ถูกต้อง";
+    }
+
+    const temp = hourly.temperature_2m[0];
+    const humidity = hourly.relative_humidity_2m[0];
+    const precipProb = hourly.precipitation_probability[0];
+    const rain = hourly.rain[0];
+    const cloud = hourly.cloud_cover[0];
+    const wind = hourly.wind_speed_10m[0];
 
     let report = `🌤 สภาพอากาศล่าสุด:\n`;
-    report += `🌡 อุณหภูมิ: ${temp} °C\n`;
-    report += `💧 ความชื้น: ${humidity} %\n`;
-    report += `🌧 โอกาสฝนตก: ${precipProb} %\n`;
-    report += `💧 ปริมาณฝน: ${rain} มม.\n`;
-    report += `☁️ เมฆปกคลุม: ${cloud} %\n`;
-    report += `💨 ความเร็วลม: ${wind} กม./ชม.`;
+    report += `🌡 อุณหภูมิ: ${temp !== undefined ? temp : 'N/A'} °C\n`;
+    report += `💧 ความชื้น: ${humidity !== undefined ? humidity : 'N/A'} %\n`;
+    report += `🌧 โอกาสฝนตก: ${precipProb !== undefined ? precipProb : 'N/A'} %\n`;
+    report += `💧 ปริมาณฝน: ${rain !== undefined ? rain : 'N/A'} มม.\n`;
+    report += `☁️ เมฆปกคลุม: ${cloud !== undefined ? cloud : 'N/A'} %\n`;
+    report += `💨 ความเร็วลม: ${wind !== undefined ? wind : 'N/A'} กม./ชม.`;
 
     return report;
   } catch (error) {
@@ -37,7 +45,6 @@ async function getWeatherInfo() {
     return "⚠️ ไม่สามารถดึงข้อมูลสภาพอากาศภายนอกได้ในขณะนี้";
   }
 }
-
 // ฟังก์ชันส่งข้อความตอบกลับทาง LINE ทันที (Reply API)
 async function replyLineMessage(replyToken, textMessage) {
   try {
