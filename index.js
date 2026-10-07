@@ -46,7 +46,7 @@ async function getWeatherInfo() {
     return report;
   } catch (error) {
     console.error("Error fetching weather details:", error);
-    return "⚠️ ไม่สามารถดึงข้อมูลสภาพอากาศภายนอกได้ในขณะนี้";
+    return "⚠️ ไม่สามารถดึงข้อมูลสภาพอากาศภายนอกได้ในขณะนี้นะจ๊ะ";
   }
 }
 
