@@ -10,9 +10,9 @@ app.post('/webhook', (req, res) => {
     const userMessage = events[0].message.text.trim();
     console.log("Receive from LINE: " + userMessage);
     
-    if (userMessage === "เปิด" || userMessage === "ON"|| userMessage === "on") {
+    if (userMessage === "เปิด" || userMessage === "ON"|| userMessage === "on"|| userMessage === "On") {
       latestCommand = "ON";
-    } else if (userMessage === "ปิด" || userMessage === "OFF"|| userMessage === "off") {
+    } else if (userMessage === "ปิด" || userMessage === "OFF"|| userMessage === "off"|| userMessage === "Off") {
       latestCommand = "OFF";
     } else if (userMessage === "check" || userMessage === "เช็ค"|| userMessage === "Check") {
       latestCommand = "check";
