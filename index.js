@@ -49,21 +49,21 @@ function convertTo24Hour(timeStr) {
   return `${String(hours).padStart(2, '0')}:${minutes}`;
 }
 
-// ชุดข้อความคู่มือการใช้งาน (สำหรับต่อท้ายข้อความเสมอ)
+// ชุดข้อความคู่มือการใช้งาน (สำหรับต่อท้ายข้อความเสมอ) - แก้ไขเครื่องหมาย + เกินออกแล้ว
 function getGuideFooter() {
-  return `\n----------------------------------\n` +
+  return `\n-----------------------------------\n` +
          `📖 คู่มือคำสั่งการใช้งาน:\n` +
          `• เปิด1-4 / ปิด1-4 / กระพริบ1-4\n` +
          `• เปิดทั้งหมด / ปิดทั้งหมด\n` +
          `• กระพริบทั้งหมด / หยุดกระพริบ\n` +
-         `• สภาพอากาศ / weather เพื่อตรวจสอบสภาพอากาศจากอินเตอร์เน็ต \n`+
-         `• check เพื่อตรวจสอบสถานะอุปกรณ์\n` +;
+         `• สภาพอากาศ (เขาค้อ)\n` +
+         `• อากาศวาริน / วารินชำราบ (อุบลฯ)\n` +
+         `• check เพื่อตรวจสอบสถานะอุปกรณ์`;
 }
 
-async function getWeatherInfo() {
+// ฟังก์ชันดึงสภาพอากาศ (รองรับระบุพิกัดและชื่อสถานที่)
+async function getWeatherInfo(lat, lon, locationName) {
   try {
-    const lat = "16.419";
-    const lon = "101.1606";
     const url = `https://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${lat},${lon}&days=1&aqi=yes`;
     
     const response = await fetch(url);
@@ -121,8 +121,8 @@ async function getWeatherInfo() {
     }
 
     let report = `📅 ${thaiDateStr}\n`;
-    report += `----------------------------------\n`;
-    report += `🌤 สภาพอากาศ (เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์):\n`;
+    report += `-----------------------------------\n`;
+    report += `🌤 สภาพอากาศ (${locationName}):\n`;
     report += `🌡 อุณหภูมิ: ${temp} °C (รู้สึกจริง ${feelsLike} °C)\n`;
     report += `💬 สภาพอากาศ: ${condition}\n`;
     report += `💧 ความชื้น: ${humidity} % | จุดน้ำค้าง: ${dewPoint} °C\n`;
@@ -180,10 +180,16 @@ app.post('/webhook', async (req, res) => {
       latestCommand = "check";
       await replyLineMessage(replyToken, "🔄 กำลังเรียกข้อมูลจาก NodeMCU...");
     } 
+    // สภาพอากาศเขาค้อ-ภูทับเบิก
     else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
-      const weatherInfo = await getWeatherInfo();
+      const weatherInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
       await replyLineMessage(replyToken, weatherInfo);
     } 
+    // สภาพอากาศบ้านวารินชำราบ จ.อุบลราชธานี (เพิ่มใหม่)
+    else if (userMessage === "อากาศวาริน" || userMessage === "วารินชำราบ" || userMessage === "อุบล" || userMessage === "สภาพอากาศวาริน") {
+      const weatherInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
+      await replyLineMessage(replyToken, weatherInfo);
+    }
     // รองรับคำสั่งควบคุมรีเลย์ทั้งหมด รวมถึงคำสั่งกระพริบและหยุดกระพริบ
     else if (
       userMessage === "เปิด1" || userMessage === "ปิด1" || userMessage === "กระพริบ1" ||
