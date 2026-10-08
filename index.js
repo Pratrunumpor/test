@@ -56,8 +56,7 @@ function getGuideFooter() {
          `• เปิด1-4 / ปิด1-4 / กระพริบ1-4\n` +
          `• เปิดทั้งหมด / ปิดทั้งหมด\n` +
          `• กระพริบทั้งหมด / หยุดกระพริบ\n` +
-         `• สภาพอากาศ (เขาค้อ)\n` +
-         `• อากาศวาริน / วารินชำราบ (อุบลฯ)\n` +
+         `• สภาพอากาศ / weather (รายงาน 2 พื้นที่)\n` +
          `• check เพื่อตรวจสอบสถานะอุปกรณ์`;
 }
 
@@ -71,7 +70,7 @@ async function getWeatherInfo(lat, lon, locationName) {
 
     if (data.error) {
       console.error("WeatherAPI Error:", data.error.message);
-      return `⚠️ ข้อผิดพลาด: ${data.error.message}`;
+      return `⚠️ ข้อผิดพลาด (${locationName}): ${data.error.message}`;
     }
 
     const thaiDateStr = getThaiDateString();
@@ -106,116 +105,4 @@ async function getWeatherInfo(lat, lon, locationName) {
       thunderstormStatus = "ค่อนข้างสูง (เฝ้าระวังฝนฟ้าคะนอง)";
     }
 
-    const sunrise = convertTo24Hour(astro.sunrise);
-    const sunset = convertTo24Hour(astro.sunset);
-    const moonrise = convertTo24Hour(astro.moonrise);
-    const moonset = convertTo24Hour(astro.moonset);
-    const moonPhase = astro.moon_phase;
-    const moonIllumination = astro.moon_illumination;
-    const precipChance = day.daily_chance_of_rain;
-
-    let fogPercent = Math.min(Math.round(((humidity - 50) / 50) * 100), 100);
-    if (fogPercent < 0) fogPercent = 0;
-    if (cloud > 80 && humidity > 85) {
-      fogPercent = Math.min(fogPercent + 20, 99);
-    }
-
-    let report = `📅 ${thaiDateStr}\n`;
-    report += `-----------------------------------\n`;
-    report += `🌤 สภาพอากาศ (${locationName}):\n`;
-    report += `🌡 อุณหภูมิ: ${temp} °C (รู้สึกจริง ${feelsLike} °C)\n`;
-    report += `💬 สภาพอากาศ: ${condition}\n`;
-    report += `💧 ความชื้น: ${humidity} % | จุดน้ำค้าง: ${dewPoint} °C\n`;
-    report += `🌧 ปริมาณฝน: ${rain} มม. (โอกาสฝนตก: ${precipChance}%)\n`;
-    report += `⚡ พายุฝนฟ้าคะนอง: ${thunderstormStatus}\n`;
-    report += `☁️ เมฆปกคลุม: ${cloud} % | ฐานเมฆ: ${cloudBaseMeters} ม.\n`;
-    report += `💨 ลม: ${windSpeed} กม./ชม. (ทิศทาง: ${windDir})\n`;
-    report += `👀 ระยะมองเห็น: ${visibility} กม. | UV Index: ${uvIndex}\n`;
-    report += `😷 PM2.5: ${pm25} µg/m³ (AQI: ${aqi})\n`;
-    report += `🌫 โอกาสเกิดหมอก: ${fogPercent} %\n`;
-    report += `\n🌙 ข้อมูลดาราศาสตร์:\n`;
-    report += `☀️ พระอาทิตย์ขึ้น: ${sunrise} น. | ตก: ${sunset} น.\n`;
-    report += `🌙 พระจันทร์ขึ้น: ${moonrise} น. | ตก: ${moonset} น.\n`;
-    report += `🌕 ข้างขึ้นข้างแรม: ${moonPhase}\n`;
-    report += `✨ ความสว่างดวงจันทร์: ${moonIllumination} %`;
-
-    return report;
-  } catch (error) {
-    console.error("Fetch Error:", error);
-    return `⚠️ Error: ${error.message}`;
-  }
-}
-
-async function replyLineMessage(replyToken, textMessage) {
-  try {
-    const finalMessage = textMessage + getGuideFooter();
-
-    await fetch('https://api.line.me/v2/bot/message/reply', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
-      },
-      body: JSON.stringify({
-        replyToken: replyToken,
-        messages: [{ type: 'text', text: finalMessage }]
-      })
-    });
-  } catch (error) {
-    console.error("Error replying to LINE:", error);
-  }
-}
-
-app.post('/webhook', async (req, res) => {
-  const events = req.body.events;
-  if (events && events.length > 0) {
-    const event = events[0];
-    
-    // จัดการ Normalize ข้อความภาษาไทยป้องกันปัญหา Encoding ตัวอักษร
-    const userMessage = event.message.text ? event.message.text.trim().normalize('NFC') : "";
-    const replyToken = event.replyToken;
-
-    console.log("Receive from LINE: " + userMessage);
-
-    if (userMessage === "check" || userMessage === "เช็ค") {
-      latestCommand = "check";
-      await replyLineMessage(replyToken, "🔄 กำลังเรียกข้อมูลจาก NodeMCU...");
-    } 
-    // สภาพอากาศเขาค้อ-ภูทับเบิก
-    else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
-      const weatherInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
-      await replyLineMessage(replyToken, weatherInfo);
-     
-     const weatherInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
-      await replyLineMessage(replyToken, weatherInfo);
-    }
-    // รองรับคำสั่งควบคุมรีเลย์ทั้งหมด
-    else if (
-      userMessage === "เปิด1" || userMessage === "ปิด1" || userMessage === "กระพริบ1" ||
-      userMessage === "เปิด2" || userMessage === "ปิด2" || userMessage === "กระพริบ2" ||
-      userMessage === "เปิด3" || userMessage === "ปิด3" || userMessage === "กระพริบ3" ||
-      userMessage === "เปิด4" || userMessage === "ปิด4" || userMessage === "กระพริบ4" ||
-      userMessage === "เปิดทั้งหมด" || userMessage === "ปิดทั้งหมด" || 
-      userMessage === "กระพริบทั้งหมด" || userMessage === "หยุดกระพริบ"
-    ) {
-      latestCommand = userMessage;
-      let statusReport = `⚙️ ส่งคำสั่ง [${userMessage}] ไปยังอุปกรณ์แล้ว`;
-      await replyLineMessage(replyToken, statusReport);
-    }
-    // หากพิมพ์คำสั่งอื่นๆ ที่ไม่ตรง
-    else {
-      await replyLineMessage(replyToken, `❓ ไม่พบคำสั่ง [${userMessage}] ในระบบ`);
-    }
-  }
-  res.sendStatus(200);
-});
-
-app.get('/command', (req, res) => {
-  res.send(latestCommand);
-  if (latestCommand === "check" || latestCommand.startsWith("เปิด") || latestCommand.startsWith("ปิด") || latestCommand.startsWith("กระพริบ") || latestCommand === "หยุดกระพริบ") {
-    latestCommand = "OFF"; 
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    const sunrise = convertTo24Hour(astro.sunrise
