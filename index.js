@@ -32,6 +32,14 @@ function getThaiDateString() {
 
 function convertTo24Hour(timeStr) {
   if (!timeStr || typeof timeStr !== 'string') return timeStr;
+  
+  if (timeStr.includes('-') && timeStr.includes(':')) {
+    const parts = timeStr.split(' ');
+    if (parts.length === 2) {
+      return parts[1];
+    }
+  }
+
   const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
   if (!match) return timeStr;
   
@@ -43,6 +51,23 @@ function convertTo24Hour(timeStr) {
   if (modifier === 'AM' && hours === 12) hours = 0;
   
   return `${String(hours).padStart(2, '0')}:${minutes}`;
+}
+
+// ฟังก์ชันแปลผลระดับ UV และให้คำแนะนำเลี่ยงแดด
+function getUvAdvice(uv) {
+  if (uv === undefined || uv === null || isNaN(uv)) return { level: "N/A", advice: "ไม่มีข้อมูล" };
+  
+  if (uv <= 2) {
+    return { level: "ต่ำ (Low)", advice: "ปลอดภัย สามารถทำกิจกรรมกลางแจ้งได้ปกติ" };
+  } else if (uv <= 5) {
+    return { level: "ปานกลาง (Moderate)", advice: "ควรสวมแว่นกันแดดและทาครีมกันแดดหากอยู่กลางแจ้งนานๆ" };
+  } else if (uv <= 7) {
+    return { level: "สูง (High)", advice: "⚠️ ควรหลีกเลี่ยงแดดช่วงเวลา 10:00 - 16:00 น. ควรสวมหมวก ร่ม และครีมกันแดด SPF 30+" };
+  } else if (uv <= 10) {
+    return { level: "สูงมาก (Very High)", advice: "⚠️⚠️ อันตราย! ควรงดกิจกรรมกลางแจ้งช่วง 10:00 - 16:00 น. หากจำเป็นต้องออกแดดควรสวมเสื้อผ้าแขนยาวและป้องกันตัวอย่างเข้มงวด" };
+  } else {
+    return { level: "รุนแรงที่สุด (Extreme)", advice: "🚨🚨 อันตรายขั้นสุด! หลีกเลี่ยงการโดนแดดโดยเด็ดขาดในช่วงกลางวัน ผิวหนังอาจไหม้เกรียมได้ภายในไม่กี่นาที" };
+  }
 }
 
 function getGuideFooter() {
@@ -67,8 +92,9 @@ async function getWeatherInfo(lat, lon, locationName) {
 
     const thaiDateStr = getThaiDateString();
     const current = data.current;
-    const astro = data.forecast.forecastday[0].astro;
-    const day = data.forecast.forecastday[0].day;
+    const forecastDay = data.forecast.forecastday[0];
+    const astro = forecastDay.astro;
+    const day = forecastDay.day;
 
     const temp = current.temp_c;
     const feelsLike = current.feelslike_c;
@@ -83,6 +109,21 @@ async function getWeatherInfo(lat, lon, locationName) {
     const uvIndex = current.uv;
     const pm25 = current.air_quality?.pm2_5 ? current.air_quality.pm2_5.toFixed(1) : 'N/A';
     const aqi = current.air_quality?.['us-epa-index'] ?? 'N/A';
+
+    let maxTempTime = 'N/A';
+    let minTempTime = 'N/A';
+    if (forecastDay.hour && forecastDay.hour.length > 0) {
+      let maxObj = forecastDay.hour[0];
+      let minObj = forecastDay.hour[0];
+      
+      for (let h of forecastDay.hour) {
+        if (h.temp_c > maxObj.temp_c) maxObj = h;
+        if (h.temp_c < minObj.temp_c) minObj = h;
+      }
+      
+      maxTempTime = convertTo24Hour(maxObj.time);
+      minTempTime = convertTo24Hour(minObj.time);
+    }
 
     const cloudBaseMeters = (dewPoint !== undefined && temp !== undefined) 
       ? Math.round((temp - dewPoint) * 125) 
@@ -110,17 +151,24 @@ async function getWeatherInfo(lat, lon, locationName) {
       fogPercent = Math.min(fogPercent + 20, 99);
     }
 
+    // เรียกใช้งานฟังก์ชันแปลผล UV
+    const uvAnalysis = getUvAdvice(uvIndex);
+
     let report = `📅 ${thaiDateStr}\n`;
     report += `-----------------------------------\n`;
     report += `🌤 สภาพอากาศ (${locationName}):\n`;
-    report += `🌡 อุณหภูมิ: ${temp} °C (รู้สึกจริง ${feelsLike} °C)\n`;
+    report += `🌡 อุณหภูมิปัจจุบัน: ${temp} °C (รู้สึกจริง ${feelsLike} °C)\n`;
+    report += `📈 อุณหภูมิสูงสุด: ${day.maxtemp_c} °C (เวลา ${maxTempTime} น.)\n`;
+    report += `📉 อุณหภูมิต่ำสุด: ${day.mintemp_c} °C (เวลา ${minTempTime} น.)\n`;
     report += `💬 สภาพอากาศ: ${condition}\n`;
     report += `💧 ความชื้น: ${humidity} % | จุดน้ำค้าง: ${dewPoint} °C\n`;
     report += `🌧 ปริมาณฝน: ${rain} มม. (โอกาสฝนตก: ${precipChance}%)\n`;
     report += `⚡ พายุฝนฟ้าคะนอง: ${thunderstormStatus}\n`;
     report += `☁️ เมฆปกคลุม: ${cloud} % | ฐานเมฆ: ${cloudBaseMeters} ม.\n`;
     report += `💨 ลม: ${windSpeed} กม./ชม. (ทิศทาง: ${windDir})\n`;
-    report += `👀 ระยะมองเห็น: ${visibility} กม. | UV Index: ${uvIndex}\n`;
+    report += `👀 ระยะมองเห็น: ${visibility} กม.\n`;
+    report += `☀️ UV Index: ${uvIndex} [${uvAnalysis.level}]\n`;
+    report += `💡 คำแนะนำแดด: ${uvAnalysis.advice}\n`;
     report += `😷 PM2.5: ${pm25} µg/m³ (AQI: ${aqi})\n`;
     report += `🌫 โอกาสเกิดหมอก: ${fogPercent} %\n`;
     report += `\n🌙 ข้อมูลดาราศาสตร์:\n`;
@@ -136,7 +184,6 @@ async function getWeatherInfo(lat, lon, locationName) {
   }
 }
 
-// ฟังก์ชันส่งข้อความแบบหลายชุด (Array) พร้อมแนบคู่มือที่ข้อความสุดท้าย
 async function replyLineMessages(replyToken, messagesArray) {
   try {
     if (messagesArray.length > 0) {
@@ -174,15 +221,12 @@ app.post('/webhook', async (req, res) => {
       latestCommand = "check";
       await replyLineMessages(replyToken, ["🔄 กำลังเรียกข้อมูลจาก NodeMCU..."]);
     } 
-    // เมื่อพิมพ์คำสั่ง weather หรือ สภาพอากาศ จะแบ่งส่ง 2 ข้อความ (เขาค้อ และ วารินชำราบ) ทันที
     else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
       const khaoKhoInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
       const varinInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
 
-      // ส่งแยกเป็น 2 บับเบิ้ล (ชุดที่ 1 เขาค้อ | ชุดที่ 2 วารินชำราบ + คู่มือ)
       await replyLineMessages(replyToken, [khaoKhoInfo, varinInfo]);
     }
-    // ควบคุมรีเลย์
     else if (
       userMessage === "เปิด1" || userMessage === "ปิด1" || userMessage === "กระพริบ1" ||
       userMessage === "เปิด2" || userMessage === "ปิด2" || userMessage === "กระพริบ2" ||
