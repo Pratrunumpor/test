@@ -51,8 +51,7 @@ function getGuideFooter() {
          `• เปิด1-4 / ปิด1-4 / กระพริบ1-4\n` +
          `• เปิดทั้งหมด / ปิดทั้งหมด\n` +
          `• กระพริบทั้งหมด / หยุดกระพริบ\n` +
-         `• อากาศเขาค้อ (เช็คเขาค้อ)\n` +
-         `• อากาศวาริน (เช็ควารินชำราบ)\n` +
+         `• weather / สภาพอากาศ (รายงาน 2 พื้นที่)\n` +
          `• check เพื่อตรวจสอบสถานะอุปกรณ์`;
 }
 
@@ -137,9 +136,14 @@ async function getWeatherInfo(lat, lon, locationName) {
   }
 }
 
-async function replyLineMessage(replyToken, textMessage) {
+// ฟังก์ชันส่งข้อความแบบหลายชุด (Array) พร้อมแนบคู่มือที่ข้อความสุดท้าย
+async function replyLineMessages(replyToken, messagesArray) {
   try {
-    const finalMessage = textMessage + getGuideFooter();
+    if (messagesArray.length > 0) {
+      messagesArray[messagesArray.length - 1] += getGuideFooter();
+    }
+
+    const formattedMessages = messagesArray.map(text => ({ type: 'text', text: text }));
 
     await fetch('https://api.line.me/v2/bot/message/reply', {
       method: 'POST',
@@ -149,7 +153,7 @@ async function replyLineMessage(replyToken, textMessage) {
       },
       body: JSON.stringify({
         replyToken: replyToken,
-        messages: [{ type: 'text', text: finalMessage }]
+        messages: formattedMessages
       })
     });
   } catch (error) {
@@ -168,17 +172,15 @@ app.post('/webhook', async (req, res) => {
 
     if (userMessage === "check" || userMessage === "เช็ค") {
       latestCommand = "check";
-      await replyLineMessage(replyToken, "🔄 กำลังเรียกข้อมูลจาก NodeMCU...");
+      await replyLineMessages(replyToken, ["🔄 กำลังเรียกข้อมูลจาก NodeMCU..."]);
     } 
-    // สภาพอากาศเขาค้อ-ภูทับเบิก (พิมพ์คำว่า "อากาศเขาค้อ" หรือ "weather")
-    else if (userMessage === "weather" || userMessage === "อากาศเขาค้อ" || userMessage === "เขาค้อ") {
-      const weatherInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
-      await replyLineMessage(replyToken, weatherInfo);
-    } 
-    // สภาพอากาศวารินชำราบ (พิมพ์คำว่า "อากาศวาริน" หรือ "วารินชำราบ")
-    else if (userMessage === "อากาศวาริน" || userMessage === "วารินชำราบ" || userMessage === "อุบล") {
-      const weatherInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
-      await replyLineMessage(replyToken, weatherInfo);
+    // เมื่อพิมพ์คำสั่ง weather หรือ สภาพอากาศ จะแบ่งส่ง 2 ข้อความ (เขาค้อ และ วารินชำราบ) ทันที
+    else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
+      const khaoKhoInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
+      const varinInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
+
+      // ส่งแยกเป็น 2 บับเบิ้ล (ชุดที่ 1 เขาค้อ | ชุดที่ 2 วารินชำราบ + คู่มือ)
+      await replyLineMessages(replyToken, [khaoKhoInfo, varinInfo]);
     }
     // ควบคุมรีเลย์
     else if (
@@ -191,10 +193,10 @@ app.post('/webhook', async (req, res) => {
     ) {
       latestCommand = userMessage;
       let statusReport = `⚙️ ส่งคำสั่ง [${userMessage}] ไปยังอุปกรณ์แล้ว`;
-      await replyLineMessage(replyToken, statusReport);
+      await replyLineMessages(replyToken, [statusReport]);
     }
     else {
-      await replyLineMessage(replyToken, `❓ ไม่พบคำสั่ง [${userMessage}] ในระบบ`);
+      await replyLineMessages(replyToken, [`❓ ไม่พบคำสั่ง [${userMessage}] ในระบบ`]);
     }
   }
   res.sendStatus(200);
