@@ -162,13 +162,26 @@ app.post('/webhook', async (req, res) => {
 
     console.log("Receive from LINE: " + userMessage);
 
+    // รองรับคำสั่งเช็คสถานะ
     if (userMessage === "check" || userMessage === "เช็ค") {
       latestCommand = "check";
       await replyLineMessage(replyToken, "🔄 กำลังเรียกข้อมูลจาก NodeMCU...");
     } 
+    // รองรับคำสั่งสภาพอากาศ
     else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
       const weatherInfo = await getWeatherInfo();
       await replyLineMessage(replyToken, weatherInfo);
+    } 
+    // รองรับคำสั่งควบคุมรีเลย์ทั้ง 4 ตัว
+    else if (
+      userMessage === "เปิด1" || userMessage === "ปิด1" ||
+      userMessage === "เปิด2" || userMessage === "ปิด2" ||
+      userMessage === "เปิด3" || userMessage === "ปิด3" ||
+      userMessage === "เปิด4" || userMessage === "ปิด4" ||
+      userMessage === "เปิดทั้งหมด" || userMessage === "ปิดทั้งหมด"
+    ) {
+      latestCommand = userMessage;
+      await replyLineMessage(replyToken, `⚙️ ส่งคำสั่ง [${userMessage}] ไปยังอุปกรณ์แล้ว`);
     }
   }
   res.sendStatus(200);
@@ -176,7 +189,8 @@ app.post('/webhook', async (req, res) => {
 
 app.get('/command', (req, res) => {
   res.send(latestCommand);
-  if (latestCommand === "check") {
+  // หากคำสั่งไม่ใช่ check ให้รีเซ็ตค่ากลับเป็น OFF (หรือจะคงไว้จนกว่าจะมีการเปลี่ยนคำสั่งก็ได้)
+  if (latestCommand === "check" || latestCommand.startsWith("เปิด") || latestCommand.startsWith("ปิด")) {
     latestCommand = "OFF"; 
   }
 });
