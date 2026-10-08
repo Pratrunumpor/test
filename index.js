@@ -49,7 +49,7 @@ function convertTo24Hour(timeStr) {
   return `${String(hours).padStart(2, '0')}:${minutes}`;
 }
 
-// ชุดข้อความคู่มือการใช้งาน (สำหรับต่อท้ายข้อความเสมอ) - แก้ไขเครื่องหมาย + เกินออกแล้ว
+// ชุดข้อความคู่มือการใช้งาน (สำหรับต่อท้ายข้อความเสมอ)
 function getGuideFooter() {
   return `\n-----------------------------------\n` +
          `📖 คู่มือคำสั่งการใช้งาน:\n` +
@@ -142,81 +142,14 @@ async function getWeatherInfo(lat, lon, locationName) {
     return report;
   } catch (error) {
     console.error("Fetch Error:", error);
-    return "⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์สภาพอากาศได้ในขณะนี้";
+    return `⚠️ Error: ${error.message}`;
   }
 }
 
 async function replyLineMessage(replyToken, textMessage) {
   try {
-    // นำคู่มือการใช้งานมาต่อท้ายข้อความเสมอ
     const finalMessage = textMessage + getGuideFooter();
 
     await fetch('https://api.line.me/v2/bot/message/reply', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
-      },
-      body: JSON.stringify({
-        replyToken: replyToken,
-        messages: [{ type: 'text', text: finalMessage }]
-      })
-    });
-  } catch (error) {
-    console.error("Error replying to LINE:", error);
-  }
-}
-
-app.post('/webhook', async (req, res) => {
-  const events = req.body.events;
-  if (events && events.length > 0) {
-    const event = events[0];
-    const userMessage = event.message.text.trim();
-    const replyToken = event.replyToken;
-
-    console.log("Receive from LINE: " + userMessage);
-
-    if (userMessage === "check" || userMessage === "เช็ค") {
-      latestCommand = "check";
-      await replyLineMessage(replyToken, "🔄 กำลังเรียกข้อมูลจาก NodeMCU...");
-    } 
-    // สภาพอากาศเขาค้อ-ภูทับเบิก
-    else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
-      const weatherInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
-      await replyLineMessage(replyToken, weatherInfo);
-    } 
-    // สภาพอากาศบ้านวารินชำราบ จ.อุบลราชธานี (เพิ่มใหม่)
-    else if (userMessage === "อากาศวาริน" || userMessage === "วารินชำราบ" || userMessage === "อุบล" || userMessage === "สภาพอากาศวาริน") {
-      const weatherInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
-      await replyLineMessage(replyToken, weatherInfo);
-    }
-    // รองรับคำสั่งควบคุมรีเลย์ทั้งหมด รวมถึงคำสั่งกระพริบและหยุดกระพริบ
-    else if (
-      userMessage === "เปิด1" || userMessage === "ปิด1" || userMessage === "กระพริบ1" ||
-      userMessage === "เปิด2" || userMessage === "ปิด2" || userMessage === "กระพริบ2" ||
-      userMessage === "เปิด3" || userMessage === "ปิด3" || userMessage === "กระพริบ3" ||
-      userMessage === "เปิด4" || userMessage === "ปิด4" || userMessage === "กระพริบ4" ||
-      userMessage === "เปิดทั้งหมด" || userMessage === "ปิดทั้งหมด" || 
-      userMessage === "กระพริบทั้งหมด" || userMessage === "หยุดกระพริบ"
-    ) {
-      latestCommand = userMessage;
-      let statusReport = `⚙️ ส่งคำสั่ง [${userMessage}] ไปยังอุปกรณ์แล้ว`;
-      await replyLineMessage(replyToken, statusReport);
-    }
-    // หากพิมพ์คำสั่งอื่นๆ ที่ไม่ตรง ให้ส่งข้อความแจ้งเตือนพร้อมคู่มือ
-    else {
-      await replyLineMessage(replyToken, `❓ ไม่พบคำสั่ง [${userMessage}] ในระบบ`);
-    }
-  }
-  res.sendStatus(200);
-});
-
-app.get('/command', (req, res) => {
-  res.send(latestCommand);
-  if (latestCommand === "check" || latestCommand.startsWith("เปิด") || latestCommand.startsWith("ปิด") || latestCommand.startsWith("กระพริบ") || latestCommand === "หยุดกระพริบ") {
-    latestCommand = "OFF"; 
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
