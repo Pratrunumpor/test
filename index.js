@@ -7,9 +7,7 @@ let latestCommand = "OFF";
 const CHANNEL_ACCESS_TOKEN = "EEaMRFWfkwXaZVIa4DSiIVj+B3FMoAjgJBXa7YP+QQPbSDuKBkVVd4ScIczJcal1sQq1OsOyFlR8VmcWA4GLHCmM8xhkbcvcFXljzpzBOAqbYcVdM9jIJ0x4lHvojlUTvlRDb05JjG5l3Inl1GZ+ewdB04t89/1O/w1cDnyilFU=";
 const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710";
 
-// ตัวแปรสำหรับเก็บ User ID ของผู้ใช้ที่เคยคุยกับบอท (เพื่อให้บอททักมาหาเองได้)
 let savedUserId = null;
-// ตัวแปรป้องกันไม่ให้แจ้งเตือนซ้ำๆ ในวันเดียวกันหากฝนตกค้างอยู่
 let lastAlertDate = { "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์": "", "อ.วารินชำราบ จ.อุบลราชธานี": "" };
 
 function getThaiDateString() {
@@ -80,7 +78,8 @@ function getGuideFooter() {
          `• เปิด1-4 / ปิด1-4 / กระพริบ1-4\n` +
          `• เปิดทั้งหมด / ปิดทั้งหมด\n` +
          `• กระพริบทั้งหมด / หยุดกระพริบ\n` +
-         `• weather / สภาพอากาศ (รายงาน 2 พื้นที่)\n` +
+         `• weather / สภาพอากาศ (รายงาน 2 พื้นที่หลัก)\n` +
+         `• 📍 แชร์ตำแหน่งที่ตั้ง (Location) จาก LINE ได้เลย\n` +
          `• check เพื่อตรวจสอบสถานะอุปกรณ์`;
 }
 
@@ -187,7 +186,6 @@ async function getWeatherInfo(lat, lon, locationName) {
   }
 }
 
-// ฟังก์ชันสำหรับส่ง Push Message (บอททักหาผู้ใช้เอง)
 async function sendPushMessage(userId, textMessage) {
   try {
     await fetch('https://api.line.me/v2/bot/message/push', {
@@ -206,7 +204,6 @@ async function sendPushMessage(userId, textMessage) {
   }
 }
 
-// ฟังก์ชันตอบกลับข้อความปกติ (Reply Message)
 async function replyLineMessages(replyToken, messagesArray) {
   try {
     if (messagesArray.length > 0) {
@@ -231,12 +228,10 @@ async function replyLineMessages(replyToken, messagesArray) {
   }
 }
 
-// ระบบตรวจสอบสภาพอากาศอัตโนมัติเบื้องหลัง (ทำงานทุกๆ 1 ชั่วโมง)
+// ตรวจสอบสภาพอากาศอัตโนมัติทุก 1 ชั่วโมง
 setInterval(async () => {
-  if (!savedUserId) return; // ถ้ายังไม่มีคนทักเข้ามา บอทจะยังไม่รู้จะส่งหาใคร
+  if (!savedUserId) return;
 
-  console.log("⏰ กำลังตรวจสอบสภาพอากาศอัตโนมัติเพื่อแจ้งเตือนฝน...");
-  
   const locations = [
     { lat: "16.419", lon: "101.1606", name: "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์" },
     { lat: "15.195", lon: "104.872", name: "อ.วารินชำราบ จ.อุบลราชธานี" }
@@ -247,12 +242,10 @@ setInterval(async () => {
   for (let loc of locations) {
     const result = await getWeatherInfo(loc.lat, loc.lon, loc.name);
     const condLower = result.condition.toLowerCase();
-    
-    // เงื่อนไขแจ้งเตือน: โอกาสฝนตก > 60% หรือมีคำว่า rain / thunder / storm และยังไม่ได้แจ้งเตือนในวันนี้
     const isRainy = result.chanceOfRain > 60 || condLower.includes('rain') || condLower.includes('thunder') || condLower.includes('storm');
 
     if (isRainy && lastAlertDate[loc.name] !== todayStr) {
-      lastAlertDate[loc.name] = todayStr; // บันทึกว่าแจ้งเตือนของวันนี้แล้ว
+      lastAlertDate[loc.name] = todayStr;
 
       let alertMsg = `🚨 **แจ้งเตือนสภาพอากาศ (${loc.name})** 🚨\n`;
       alertMsg += `⚠️ ตรวจพบแนวโน้มฝนตก / พายุฝนฟ้าคะนอง!\n`;
@@ -261,24 +254,36 @@ setInterval(async () => {
       alertMsg += `💡 แนะนำ: ควรเก็บผ้าหรือเตรียมตัวรับมือฝนตกในเร็วๆ นี้ครับ`;
 
       await sendPushMessage(savedUserId, alertMsg);
-      console.log(`📨 ส่งแจ้งเตือนฝนตกสำเร็จสำหรับพื้นที่: ${loc.name}`);
     }
   }
-}, 60 * 60 * 1000); // เช็คทุกๆ 1 ชั่วโมง (60 นาที)
+}, 60 * 60 * 1000);
 
 app.post('/webhook', async (req, res) => {
   const events = req.body.events;
   if (events && events.length > 0) {
     const event = events[0];
     
-    // บันทึก User ID ของผู้ใช้เก็บไว้ทันทีที่เขาทักมา เพื่อให้บอทใช้ส่ง Push แจ้งเตือนได้
     if (event.source && event.source.userId) {
       savedUserId = event.source.userId;
     }
 
-    const userMessage = event.message.text ? event.message.text.trim().normalize('NFC') : "";
     const replyToken = event.replyToken;
 
+    // 1. กรณีผู้ใช้แชร์ตำแหน่งที่ตั้ง (Location Pin) มาทาง LINE
+    if (event.message && event.message.type === 'location') {
+      const lat = event.message.latitude;
+      const lon = event.message.longitude;
+      const locationName = event.message.address || event.message.title || "ตำแหน่งที่คุณปักหมุด";
+
+      console.log(`Receive Location from LINE -> Lat: ${lat}, Lon: ${lon}, Name: ${locationName}`);
+
+      const weatherResult = await getWeatherInfo(lat, lon, locationName);
+      await replyLineMessages(replyToken, [weatherResult.text]);
+      return res.sendStatus(200);
+    }
+
+    // 2. กรณีผู้ใช้พิมพ์ข้อความปกติ
+    const userMessage = event.message && event.message.text ? event.message.text.trim().normalize('NFC') : "";
     console.log("Receive from LINE: " + userMessage);
 
     if (userMessage === "check" || userMessage === "เช็ค") {
