@@ -153,6 +153,27 @@ async function replyLineMessage(replyToken, textMessage) {
   }
 }
 
+// ข้อความแนะนำคำสั่ง (Help Menu)
+function getHelpMessage() {
+  return `🤖 รายการคำสั่งบอทควบคุมอุปกรณ์:\n` +
+         `-----------------------------------\n` +
+         `💡 ควบคุมรีเลย์แต่ละช่อง:\n` +
+         `• เปิด1 / ปิด1 / กระพริบ1\n` +
+         `• เปิด2 / ปิด2 / กระพริบ2\n` +
+         `• เปิด3 / ปิด3 / กระพริบ3\n` +
+         `• เปิด4 / ปิด4 / กระพริบ4\n\n` +
+         `⚡ ควบคุมทั้งหมด:\n` +
+         `• เปิดทั้งหมด\n` +
+         `• ปิดทั้งหมด\n` +
+         `• กระพริบทั้งหมด\n` +
+         `• หยุดกระพริบ\n\n` +
+         `🌤 ตรวจสอบสภาพอากาศ:\n` +
+         `• สภาพอากาศ / เช็คสภาพอากาศ\n` +
+         `• weather\n\n` +
+         `ℹ️ อื่นๆ:\n` +
+         `• เมนู / คำสั่ง / ช่วยเหลือ`;
+}
+
 app.post('/webhook', async (req, res) => {
   const events = req.body.events;
   if (events && events.length > 0) {
@@ -170,7 +191,12 @@ app.post('/webhook', async (req, res) => {
       const weatherInfo = await getWeatherInfo();
       await replyLineMessage(replyToken, weatherInfo);
     } 
-    // รองรับคำสั่งควบคุมรีเลย์ทั้งหมด รวมถึงคำสั่งกระพริบและหยุดกระพริบ
+    // เมนูช่วยเหลือ
+    else if (userMessage === "เมนู" || userMessage === "คำสั่ง" || userMessage === "ช่วยเหลือ" || userMessage === "help") {
+      const helpMsg = getHelpMessage();
+      await replyLineMessage(replyToken, helpMsg);
+    }
+    // รองรับคำสั่งควบคุมรีเลย์ทั้งหมด พร้อมรายงานสถานะอุปกรณ์
     else if (
       userMessage === "เปิด1" || userMessage === "ปิด1" || userMessage === "กระพริบ1" ||
       userMessage === "เปิด2" || userMessage === "ปิด2" || userMessage === "กระพริบ2" ||
@@ -180,7 +206,14 @@ app.post('/webhook', async (req, res) => {
       userMessage === "กระพริบทั้งหมด" || userMessage === "หยุดกระพริบ"
     ) {
       latestCommand = userMessage;
-      await replyLineMessage(replyToken, `⚙️ ส่งคำสั่ง [${userMessage}] ไปยังอุปกรณ์แล้ว`);
+      
+      // รายงานสถานะกลับทาง LINE ทันทีที่สั่งงาน
+      let statusReport = `📢 รายงานสถานะอุปกรณ์:\n` +
+                         `-----------------------------------\n` +
+                         `⚙️ คำสั่งล่าสุด: [${userMessage}]\n` +
+                         `✅ ส่งคำสั่งไปยังอุปกรณ์เรียบร้อยแล้ว`;
+      
+      await replyLineMessage(replyToken, statusReport);
     }
   }
   res.sendStatus(200);
