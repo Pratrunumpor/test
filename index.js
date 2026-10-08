@@ -185,12 +185,12 @@ app.post('/webhook', async (req, res) => {
     else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
       const weatherInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
       await replyLineMessage(replyToken, weatherInfo);
-    } 
-    // สภาพอากาศบ้านวารินชำราบ จ.อุบลราชธานี (รองรับคำที่มักพิมพ์)
-    else if (userMessage === "อากาศวาริน" || userMessage === "วารินชำราบ" || userMessage === "อุบล" || userMessage === "สภาพอากาศวาริน") {
-      const weatherInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
+        // สภาพอากาศบ้านวารินชำราบ จ.อุบลราชธานี (รองรับคำที่มักพิมพ์)
+      weatherInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
       await replyLineMessage(replyToken, weatherInfo);
-    }
+    } 
+  
+
     // รองรับคำสั่งควบคุมรีเลย์ทั้งหมด
     else if (
       userMessage === "เปิด1" || userMessage === "ปิด1" || userMessage === "กระพริบ1" ||
