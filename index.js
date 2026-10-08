@@ -7,6 +7,11 @@ let latestCommand = "OFF";
 const CHANNEL_ACCESS_TOKEN = "EEaMRFWfkwXaZVIa4DSiIVj+B3FMoAjgJBXa7YP+QQPbSDuKBkVVd4ScIczJcal1sQq1OsOyFlR8VmcWA4GLHCmM8xhkbcvcFXljzpzBOAqbYcVdM9jIJ0x4lHvojlUTvlRDb05JjG5l3Inl1GZ+ewdB04t89/1O/w1cDnyilFU=";
 const WEATHER_API_KEY = "151f50fc23134b6fa2c170835260710";
 
+// ตัวแปรสำหรับเก็บ User ID ของผู้ใช้ที่เคยคุยกับบอท (เพื่อให้บอททักมาหาเองได้)
+let savedUserId = null;
+// ตัวแปรป้องกันไม่ให้แจ้งเตือนซ้ำๆ ในวันเดียวกันหากฝนตกค้างอยู่
+let lastAlertDate = { "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์": "", "อ.วารินชำราบ จ.อุบลราชธานี": "" };
+
 function getThaiDateString() {
   try {
     const now = new Date();
@@ -53,7 +58,6 @@ function convertTo24Hour(timeStr) {
   return `${String(hours).padStart(2, '0')}:${minutes}`;
 }
 
-// ฟังก์ชันแปลผลระดับ UV และให้คำแนะนำเลี่ยงแดด
 function getUvAdvice(uv) {
   if (uv === undefined || uv === null || isNaN(uv)) return { level: "N/A", advice: "ไม่มีข้อมูล" };
   
@@ -87,7 +91,7 @@ async function getWeatherInfo(lat, lon, locationName) {
     const data = await response.json();
 
     if (data.error) {
-      return `⚠️ ข้อผิดพลาด (${locationName}): ${data.error.message}`;
+      return { text: `⚠️ ข้อผิดพลาด (${locationName}): ${data.error.message}`, chanceOfRain: 0, condition: "" };
     }
 
     const thaiDateStr = getThaiDateString();
@@ -151,7 +155,6 @@ async function getWeatherInfo(lat, lon, locationName) {
       fogPercent = Math.min(fogPercent + 20, 99);
     }
 
-    // เรียกใช้งานฟังก์ชันแปลผล UV
     const uvAnalysis = getUvAdvice(uvIndex);
 
     let report = `📅 ${thaiDateStr}\n`;
@@ -177,13 +180,33 @@ async function getWeatherInfo(lat, lon, locationName) {
     report += `🌕 ข้างขึ้นข้างแรม: ${moonPhase}\n`;
     report += `✨ ความสว่างดวงจันทร์: ${moonIllumination} %`;
 
-    return report;
+    return { text: report, chanceOfRain: precipChance, condition: condition };
   } catch (error) {
     console.error("Fetch Error:", error);
-    return `⚠️ Error (${locationName}): ${error.message}`;
+    return { text: `⚠️ Error (${locationName}): ${error.message}`, chanceOfRain: 0, condition: "" };
   }
 }
 
+// ฟังก์ชันสำหรับส่ง Push Message (บอททักหาผู้ใช้เอง)
+async function sendPushMessage(userId, textMessage) {
+  try {
+    await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify({
+        to: userId,
+        messages: [{ type: 'text', text: textMessage }]
+      })
+    });
+  } catch (error) {
+    console.error("Error pushing message to LINE:", error);
+  }
+}
+
+// ฟังก์ชันตอบกลับข้อความปกติ (Reply Message)
 async function replyLineMessages(replyToken, messagesArray) {
   try {
     if (messagesArray.length > 0) {
@@ -208,10 +231,51 @@ async function replyLineMessages(replyToken, messagesArray) {
   }
 }
 
+// ระบบตรวจสอบสภาพอากาศอัตโนมัติเบื้องหลัง (ทำงานทุกๆ 1 ชั่วโมง)
+setInterval(async () => {
+  if (!savedUserId) return; // ถ้ายังไม่มีคนทักเข้ามา บอทจะยังไม่รู้จะส่งหาใคร
+
+  console.log("⏰ กำลังตรวจสอบสภาพอากาศอัตโนมัติเพื่อแจ้งเตือนฝน...");
+  
+  const locations = [
+    { lat: "16.419", lon: "101.1606", name: "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์" },
+    { lat: "15.195", lon: "104.872", name: "อ.วารินชำราบ จ.อุบลราชธานี" }
+  ];
+
+  const todayStr = new Date().toDateString();
+
+  for (let loc of locations) {
+    const result = await getWeatherInfo(loc.lat, loc.lon, loc.name);
+    const condLower = result.condition.toLowerCase();
+    
+    // เงื่อนไขแจ้งเตือน: โอกาสฝนตก > 60% หรือมีคำว่า rain / thunder / storm และยังไม่ได้แจ้งเตือนในวันนี้
+    const isRainy = result.chanceOfRain > 60 || condLower.includes('rain') || condLower.includes('thunder') || condLower.includes('storm');
+
+    if (isRainy && lastAlertDate[loc.name] !== todayStr) {
+      lastAlertDate[loc.name] = todayStr; // บันทึกว่าแจ้งเตือนของวันนี้แล้ว
+
+      let alertMsg = `🚨 **แจ้งเตือนสภาพอากาศ (${loc.name})** 🚨\n`;
+      alertMsg += `⚠️ ตรวจพบแนวโน้มฝนตก / พายุฝนฟ้าคะนอง!\n`;
+      alertMsg += `🌧 โอกาสฝนตก: ${result.chanceOfRain}%\n`;
+      alertMsg += `💬 ลักษณะอากาศ: ${result.condition}\n`;
+      alertMsg += `💡 แนะนำ: ควรเก็บผ้าหรือเตรียมตัวรับมือฝนตกในเร็วๆ นี้ครับ`;
+
+      await sendPushMessage(savedUserId, alertMsg);
+      console.log(`📨 ส่งแจ้งเตือนฝนตกสำเร็จสำหรับพื้นที่: ${loc.name}`);
+    }
+  }
+}, 60 * 60 * 1000); // เช็คทุกๆ 1 ชั่วโมง (60 นาที)
+
 app.post('/webhook', async (req, res) => {
   const events = req.body.events;
   if (events && events.length > 0) {
     const event = events[0];
+    
+    // บันทึก User ID ของผู้ใช้เก็บไว้ทันทีที่เขาทักมา เพื่อให้บอทใช้ส่ง Push แจ้งเตือนได้
+    if (event.source && event.source.userId) {
+      savedUserId = event.source.userId;
+    }
+
     const userMessage = event.message.text ? event.message.text.trim().normalize('NFC') : "";
     const replyToken = event.replyToken;
 
@@ -222,10 +286,10 @@ app.post('/webhook', async (req, res) => {
       await replyLineMessages(replyToken, ["🔄 กำลังเรียกข้อมูลจาก NodeMCU..."]);
     } 
     else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
-      const khaoKhoInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
-      const varinInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
+      const khaoKho = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
+      const varin = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
 
-      await replyLineMessages(replyToken, [khaoKhoInfo, varinInfo]);
+      await replyLineMessages(replyToken, [khaoKho.text, varin.text]);
     }
     else if (
       userMessage === "เปิด1" || userMessage === "ปิด1" || userMessage === "กระพริบ1" ||
