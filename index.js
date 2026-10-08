@@ -183,10 +183,10 @@ app.post('/webhook', async (req, res) => {
     } 
     // สภาพอากาศเขาค้อ-ภูทับเบิก
     else if (userMessage === "weather" || userMessage === "สภาพอากาศ" || userMessage === "เช็คสภาพอากาศ") {
-      weatherInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
+      const weatherInfo = await getWeatherInfo("16.419", "101.1606", "เขาค้อ-ภูทับเบิก จ.เพชรบูรณ์");
       await replyLineMessage(replyToken, weatherInfo);
      
-      weatherInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
+     const weatherInfo = await getWeatherInfo("15.195", "104.872", "อ.วารินชำราบ จ.อุบลราชธานี");
       await replyLineMessage(replyToken, weatherInfo);
     }
     // รองรับคำสั่งควบคุมรีเลย์ทั้งหมด
